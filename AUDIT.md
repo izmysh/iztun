@@ -1,6 +1,6 @@
 # Security and deployment review
 
-## 0.3.0 review — 2026-09-30
+## 0.3.0 review - 2026-09-30
 
 Scope: IZtun's GUI, privileged helper, lifecycle, packaging and corresponding
 ARM64 engine. This is a focused source review and regression run, not independent
@@ -57,8 +57,8 @@ certification or a complete audit of upstream cryptography.
 - Repair and the recovery service authenticated again. Manual Disconnect was
   respected even with auto-connect temporarily enabled; its original setting
   was restored. Diagnostics omitted keys and the tested peer endpoint.
-- List request median was 218–219 ms with two profiles. GUI cgroup memory was
-  approximately 73–74 MiB. These are point-in-time measurements, not a claim of
+- List request median was 218-219 ms with two profiles. GUI cgroup memory was
+  approximately 73-74 MiB. These are point-in-time measurements, not a claim of
   faster response in every workload or a guaranteed memory ceiling.
 
 ### Limits
@@ -74,7 +74,7 @@ certification or a complete audit of upstream cryptography.
 - Sources include upstream engine/tool code, not OS dependencies or an offline
   Go toolchain/module cache. GitHub CI/provenance is not claimed before it runs.
 
-## Historical 0.2.1 review — 2026-09-28
+## Historical 0.2.1 review - 2026-09-28
 
 Scope: version 0.2.1 GTK frontend, root helper, service lifecycle, packaging and
 the ARM64 engine shipped to Orange Pi 5. This is not a certification or an audit
@@ -111,8 +111,8 @@ of the entire operating system or all upstream cryptographic code.
   effective with boot autostart temporarily enabled. Original setting restored.
 - Both existing profile files retained their SHA-256 hashes through migration.
 - GTK window visually checked in the real labwc/Wayland session.
-- Median list request latency with two profiles: approximately 0.19–0.20 seconds.
-- GUI cgroup memory observed around 80–87 MiB; networkd-dispatcher around 19 MiB.
+- Median list request latency with two profiles: approximately 0.19-0.20 seconds.
+- GUI cgroup memory observed around 80-87 MiB; networkd-dispatcher around 19 MiB.
   These are point-in-time measurements, not guarantees under every workload.
 
 ## Dependency scan and its limits

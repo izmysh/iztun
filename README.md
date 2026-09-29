@@ -2,278 +2,96 @@
 
 # IZtun
 
-**A lightweight desktop GUI for AmneziaWG-GO on ARM64 Linux.** Developed by **IZMYSH**.
+**A lightweight AmneziaWG-GO desktop client for ARM64 Linux.** Developed by **IZMYSH**.
 
-Import a `.conf` file, connect, and manage your VPN from a native GTK window or
-the system tray. No Electron or browser runtime.
+Import a VPN configuration, connect and manage profiles from a native GTK window or the system tray.
 
-[Project](https://github.com/izmysh/iztun) · [Releases](https://github.com/izmysh/iztun/releases) ·
-[Security](SECURITY.md) · [Audit](AUDIT.md) · [Publishing guide](PUBLISHING.md)
+[Download](https://github.com/izmysh/iztun/releases/latest) · [Manual build](BUILDING.md) · [Security](SECURITY.md)
 
-> IZtun is an independent frontend, not an official Amnezia application or a new
-> VPN protocol. You need your own working VPN server and client configuration.
+## What you need
 
-## Features
+An ARM64 Debian/Ubuntu/Armbian system with systemd and a desktop, plus a working
+AmneziaWG server and its client `.conf` file.
 
-- Import AmneziaWG `.conf` profiles with AWG 2, 3 and 3.1 parameters.
-- Connect, disconnect, repair, and optionally connect at boot.
-- Switch full tunnels; attempt to restore the previous connection if the new one fails.
-- Keep compatible split tunnels for separate private networks.
-- Rename profiles and edit configs with validation and a protected previous version.
-- Display handshake-based status, connection progress, speed and session traffic.
-- Recover after supported network-change and resume events.
-- Export diagnostics without configuration contents or private keys.
+The ready-made package needs **glibc 2.38 or newer**. Tested on Orange Pi 5 with
+ARM64 Armbian/Ubuntu. Other ARM64 boards may work but have not been validated.
+The package does not support x86-64 or 32-bit ARM.
 
-## Requirements
+## Install
 
-The `.deb` is for **ARM64 / aarch64**, not x86-64 or 32-bit ARM. It targets
-Debian/Ubuntu/Armbian with systemd, GTK 3 and `/dev/net/tun`. The release is tested
-on an Orange Pi 5 running ARM64 Armbian/Ubuntu. There is no Orange Pi-specific
-CPU/GPU code, but other boards have not been validated.
-
-The current C tool requires **glibc 2.38 or newer**; the package declares the
-minimum version required by its actual binary. Ubuntu 24.04+ and Debian 13 are
-candidate targets, not a claim of testing every setup. Build on the target OS
-for older distributions. This `.deb` is not an Android, Arch, Alpine, Windows
-or macOS package.
+1. Download [the ARM64 .deb](https://github.com/izmysh/iztun/releases/download/v0.3.0/amneziawg-linux-gui_0.3.0_arm64.deb).
+2. Open a terminal in the folder containing the downloaded file and run:
 
 ```bash
-uname -m                    # Expected: aarch64
-dpkg --print-architecture   # Expected: arm64
-getconf GNU_LIBC_VERSION
-test -c /dev/net/tun && echo 'TUN available'
-```
-
-## Install the Debian package
-
-Download the `.deb` and its `.sha256` file from a release you trust. In their directory:
-
-```bash
-# Check download integrity; a checksum is not an author signature.
-sha256sum -c amneziawg-linux-gui_0.3.0_arm64.deb.sha256
-sudo apt update
 sudo apt install ./amneziawg-linux-gui_0.3.0_arm64.deb
 sudo amneziawg-linux-gui-setup-user "$USER"
 ```
 
-**Sign out of the desktop and sign in again** to activate group membership.
-Open **IZtun** from the application menu, or run `iztun`.
+3. **Sign out of the desktop and sign back in.** Open **IZtun** from the application menu.
 
-Do not run the GUI with `sudo`. The restricted helper and tunnel services use
-administrative privileges. Members of `amneziawg` can change routes/DNS and read
-VPN keys through the editor: only add trusted users.
+The package installs the GUI, VPN engine and command-line tools together.
+The internal package name remains `amneziawg-linux-gui` for upgrade compatibility.
+If `apt` cannot find a dependency, run `sudo apt update` and try again.
 
-The package bundles `amneziawg-go`, `awg` and `awg-quick`. It conflicts with
-separately installed packages owning those tools; review any removal proposed by
-`apt` before accepting it. Internal package/service IDs retain the earlier
-`amneziawg-linux-gui` name for upgrade compatibility. The visible application and
-launcher command are **IZtun** and `iztun`.
+## Use
 
-## Everyday use
+- **+** imports a `.conf` profile.
+- **Connect / Disconnect** starts or stops the VPN.
+- **Auto-connect** connects at system boot.
+- **⋮** opens Rename, Edit configuration, Repair and diagnostic export.
+- The tray lets you control profiles without keeping the window open.
 
-1. Press **+** and choose a `.conf` file exported for your VPN server.
-2. Give its interface a short ID: up to 15 ASCII letters/digits and supported separators.
-3. Press **Connect**. A fresh handshake proves peer authentication, not Internet or DNS reachability.
-4. Use **⋮ → Rename…** for a friendly display name, including Unicode.
-5. Use **⋮ → Edit configuration…** while disconnected. Changes apply on the next connection.
+AWG 2, 3 and 3.1 parameters are supported. A new full-tunnel connection replaces
+the previous one; if it fails, IZtun attempts to restore the previous VPN.
+Edit a profile while disconnected. Closing the window hides it in the tray;
+quitting the GUI does not disconnect the VPN.
 
-**Auto-connect** means connect at system boot, not launch the GUI. Enable it for
-your preferred full tunnel rather than several competing profiles. Closing the
-window hides it in the tray. Quitting the GUI does not disconnect a system-managed
-VPN; use **Disconnect** for that.
+A recent handshake proves peer authentication, not Internet or DNS availability.
+**There is no kill switch.** Traffic may use the ordinary network after failure
+or disconnection.
 
-Bottom-right counters show combined traffic for active tunnels, updated every
-five seconds while visible. They reset when tunnels are recreated; they are not
-permanent monthly usage statistics.
+## Install from source
 
-**No kill switch is provided.** Switching, failure or disconnection may expose
-ordinary network connectivity. Split-tunnel routes and DNS must be compatible.
-
-## Build from source on ARM64
-
-Build as a regular user; use `sudo` only for installing dependencies or packages.
-Keep your sources and compiler if you plan to build updates.
-
-### 1. Install dependencies
+Download [the complete source archive](https://github.com/izmysh/iztun/releases/download/v0.3.0/iztun-0.3.0-source.tar.gz)
+and unpack it with your file manager. Open a terminal inside the unpacked folder
+and run this **as your regular user**:
 
 ```bash
-sudo apt update
-sudo apt install build-essential binutils pkg-config dpkg-dev git golang-go \
-  python3 python3-gi gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 \
-  iproute2 iptables resolvconf systemd
+bash scripts/install-from-source.sh
 ```
 
-Use `openresolv` instead where appropriate; inspect package-manager changes before
-replacing resolver integration. The build pins **Go 1.26.8**. A recent distro Go
-downloads the selected toolchain automatically. If your distro Go cannot do this,
-follow the [official Go installation instructions](https://go.dev/doc/install).
+The installer downloads dependencies, compiles AmneziaWG-GO and its tools,
+builds IZtun's package and installs it. It asks for your administrator password
+when needed. Internet access is required. Sign out and back in after installation.
 
-The source archive includes both upstream source trees, but not OS packages,
-the Go compiler or its module cache. The first build needs Internet access;
-Go dependency versions/checksums are pinned in `go.mod` and `go.sum`. This is not
-an offline installation bundle.
-
-### 2. Obtain sources
-
-Recommended: download the complete source archive and checksum from the same release:
-
-```bash
-sha256sum -c iztun-0.3.0-source.tar.gz.sha256
-tar -xzf iztun-0.3.0-source.tar.gz
-cd iztun-0.3.0
-sha256sum -c SOURCE-MANIFEST.sha256
-```
-
-This archive needs no Git initialization or submodule download. Alternatively:
-
-```bash
-git clone --recurse-submodules https://github.com/izmysh/iztun.git IZtun
-cd IZtun
-```
-
-GitHub's automatic source ZIP may omit submodules. Prefer the complete release archive.
-
-### 3. Compile AmneziaWG-GO, then the command-line tools
-
-The supported target compiles both pinned upstream components in `build/`:
-
-```bash
-make engine
-file build/engine/amneziawg-go build/engine/awg
-build/engine/amneziawg-go --version
-build/engine/awg --version
-```
-
-For clarity, here is the Go compilation step on its own, from the project root.
-It creates a binary without installing it or connecting a VPN:
-
-```bash
-mkdir -p build/amneziawg-go-source build/engine
-cp -a upstream/amneziawg-go/. build/amneziawg-go-source/
-printf 'package main\n\nconst Version = "v3.1.20260828"\n' \
-  > build/amneziawg-go-source/version.go
-(
-  cd build/amneziawg-go-source
-  GOTOOLCHAIN=go1.26.8 CGO_ENABLED=0 go build -mod=readonly -trimpath \
-    -buildvcs=false -o ../engine/amneziawg-go
-)
-```
-
-`CGO_ENABLED=0` removes the Go engine's C runtime dependency. The separate `awg`
-command is a C program and still needs libc. To build that component separately:
-
-```bash
-mkdir -p build/amneziawg-tools-source
-cp -a upstream/amneziawg-tools/. build/amneziawg-tools-source/
-make -C build/amneziawg-tools-source/src clean
-CFLAGS='-O2 -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fPIE' \
-  LDFLAGS='-pie -Wl,-z,relro,-z,now' \
-  make -C build/amneziawg-tools-source/src WIREGUARD_TOOLS_VERSION=3.1.20260812
-cp build/amneziawg-tools-source/src/wg build/engine/awg
-cp upstream/amneziawg-tools/src/wg-quick/linux.bash build/engine/awg-quick
-chmod 755 build/engine/awg-quick
-```
-
-`make engine` performs these steps for you, including cleaning stale objects.
-Exact upstream tags and commits are recorded in [UPSTREAM_VERSIONS](UPSTREAM_VERSIONS).
-IZtun does not rewrite the upstream protocol or cryptography.
-
-### 4. Check IZtun and build its package
-
-The GUI/helper are Python programs: they need no separate ARM machine-code
-compilation. These commands check Python syntax, run regressions and package the GUI with its engines:
-
-```bash
-make test
-make deb
-make source-bundle
-```
-
-`make deb` repeats tests and builds the engines to avoid stale binaries. Outputs:
-
-```text
-dist/amneziawg-linux-gui_0.3.0_arm64.deb
-dist/amneziawg-linux-gui_0.3.0_arm64.deb.sha256
-dist/iztun-0.3.0-source.tar.gz
-dist/iztun-0.3.0-source.tar.gz.sha256
-```
-
-```bash
-sudo apt install ./dist/amneziawg-linux-gui_0.3.0_arm64.deb
-sudo amneziawg-linux-gui-setup-user "$USER"
-# Sign out and back in, then:
-iztun
-```
-
-`bash scripts/install-from-source.sh` is a convenience installer combining these
-steps. Read it first: it installs system packages.
-
-### 5. Optional contributor checks
-
-```bash
-# Check the shipped engine against the Go vulnerability database (Internet required).
-make audit
-# GUI tests use synthetic profiles; no real VPN connection is created.
-sudo apt install xvfb xauth
-xvfb-run -a python3 scripts/verify-gui.py --source src/amneziawg-linux-gui
-```
-
-`verify-installed.py` and `verify-profile-actions.py` also contain opt-in live
-network tests. Read their help before running them; live checks connect/disconnect
-tunnels. Do not use them during important remote work.
+For separate engine compilation, checksums, tests and custom builds, see
+[the manual build guide](BUILDING.md). Keep the source folder and compiler for future updates.
 
 ## Troubleshooting
 
-**Access denied:** sign out/in after setup. `id -nG` must include `amneziawg`.
-Otherwise run `sudo amneziawg-linux-gui-setup-user "$USER"`, then sign in again.
+- **Access denied:** sign out and back in after user setup.
+- **No connection:** check your server/config, then try **Repair connection**.
+- **No tray:** enable StatusNotifier/AppIndicator support in your panel.
+- **Helper unavailable:** see [the service checks](BUILDING.md#service-checks).
 
-**Helper unavailable:**
+The GUI runs without `sudo`. The privileged helper manages routes and DNS.
+Only add trusted users to the `amneziawg` group; its members can read profile
+keys through the editor. Never publish VPN configs or editor screenshots.
 
-```bash
-systemctl status amneziawg-linux-gui.socket
-sudo systemctl enable --now amneziawg-linux-gui.socket
-```
+## Updates and removal
 
-**No handshake:** check server availability, endpoint, keys and protocol parameters.
-Try **Repair connection** and export a redacted report from **⋮**. Never publish
-raw configs or screenshots of the editor: they contain private keys.
-
-**Invalid config:** shell hooks (`PreUp`, `PostUp`, `PreDown`, `PostDown`),
-`SaveConfig`, custom routing tables and firewall marks are intentionally rejected.
-Use conventional spellings such as `AllowedIPs`, not `Allowed IPs`. Disconnect
-before editing. A malformed file no longer hides other profiles.
-
-**DNS problems:** configs using `DNS` require working `resolvconf` integration.
-Fix the distribution's resolver setup rather than overwriting `/etc/resolv.conf`.
-
-**No tray:** enable StatusNotifier/AppIndicator support in your desktop/panel.
-Running `iztun` reopens the window.
-
-**Recovery:** hooks are supplied for NetworkManager and networkd-dispatcher.
-On systemd-networkd systems install/enable `networkd-dispatcher`. Actual resume
-and cable-reconnection behavior depends on the OS; see [AUDIT.md](AUDIT.md).
-
-## Updates, files and uninstalling
-
-Install a new `.deb` with `sudo apt install ./PACKAGE.deb`, then reopen IZtun.
-Profiles remain in `/etc/amneziawg` with root-only access. Deleted profiles go
-to `/etc/amneziawg/.trash`; edits keep `PROFILE.conf.previous`. These contain
-private keys and must never be committed to Git.
-
-Disconnect first, then uninstall:
+Install a newer `.deb` in the same way. To remove the application, disconnect first:
 
 ```bash
 sudo apt remove amneziawg-linux-gui
 ```
 
-Profiles are intentionally kept, even on purge. Remove them separately only when
-you no longer need their keys. Removing IZtun does not remove your source tree or compiler.
+Profiles in `/etc/amneziawg`, deleted-profile backups and your source folder are retained.
 
-## Contributing, publishing and licensing
+## Project
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and the step-by-step
-[GitHub publishing guide](PUBLISHING.md). Never commit account or VPN credentials.
+IZtun is an independent frontend, not an official Amnezia application.
+IZtun and AmneziaWG-GO use MIT licenses; the bundled tools use GPL-2.0.
 
-IZtun is MIT-licensed ([LICENSE](LICENSE)). Bundled AmneziaWG-GO is MIT-licensed;
-AmneziaWG tools are GPL-2.0. Keep upstream notices and matching sources with your
-releases. Details: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[Contributing](CONTRIBUTING.md) · [Audit and limits](AUDIT.md) ·
+[Licenses](THIRD_PARTY_NOTICES.md) · [GitHub publishing](PUBLISHING.md)

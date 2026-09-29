@@ -61,6 +61,8 @@ install:
 	install -Dm0644 data/io.github.amneziawg_linux_gui.Client.desktop "$(DESTDIR)$(PREFIX)/share/applications/io.github.amneziawg_linux_gui.Client.desktop"
 	install -Dm0644 README.md "$(DESTDIR)$(PREFIX)/share/doc/amneziawg-linux-gui/README.md"
 	install -Dm0644 README.ru.md "$(DESTDIR)$(PREFIX)/share/doc/amneziawg-linux-gui/README.ru.md"
+	install -Dm0644 BUILDING.md "$(DESTDIR)$(PREFIX)/share/doc/amneziawg-linux-gui/BUILDING.md"
+	install -Dm0644 BUILDING.ru.md "$(DESTDIR)$(PREFIX)/share/doc/amneziawg-linux-gui/BUILDING.ru.md"
 	install -Dm0644 CHANGELOG.md "$(DESTDIR)$(PREFIX)/share/doc/amneziawg-linux-gui/CHANGELOG.md"
 	install -Dm0644 LICENSE "$(DESTDIR)$(PREFIX)/share/doc/amneziawg-linux-gui/LICENSE"
 	install -Dm0644 THIRD_PARTY_NOTICES.md "$(DESTDIR)$(PREFIX)/share/doc/amneziawg-linux-gui/THIRD_PARTY_NOTICES.md"

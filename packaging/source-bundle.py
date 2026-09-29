@@ -7,7 +7,7 @@ import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = ("README.md", "README.ru.md", "PUBLISHING.md", "AUDIT.md", "SECURITY.md", "CHANGELOG.md", "LICENSE",
+FILES = ("README.md", "README.ru.md", "BUILDING.md", "BUILDING.ru.md", "PUBLISHING.md", "AUDIT.md", "SECURITY.md", "CHANGELOG.md", "LICENSE",
          "CONTRIBUTING.md", "ROADMAP.md", "THIRD_PARTY_NOTICES.md", "UPSTREAM_VERSIONS", "VERSION", "Makefile", ".gitignore")
 DIRECTORIES = ("src", "data", "systemd", "sysusers.d", "tests", "scripts", "packaging", ".github",
                "upstream/amneziawg-go", "upstream/amneziawg-tools")
