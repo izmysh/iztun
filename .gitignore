@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.deb
+*.tar.gz
+.idea/
+.vscode/
+*.conf
+!sysusers.d/*.conf
+*.log
+*.key
+*.pem
+secrets/

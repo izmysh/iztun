@@ -1,0 +1,36 @@
+name: Bug report
+description: Report an IZtun problem with enough detail to reproduce it.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Please share a redacted diagnostic report when useful. Never attach VPN configs, private keys or screenshots of the configuration editor."
+  - type: input
+    id: version
+    attributes:
+      label: IZtun version
+      description: Run iztun --version.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: System
+      description: Distribution/version, CPU architecture, desktop, and whether you use NetworkManager or systemd-networkd.
+      placeholder: "Armbian/Ubuntu, ARM64, labwc, systemd-networkd"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What did you do, what happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics
+      description: Optional output from the profile's Export diagnostics action.
+      render: text

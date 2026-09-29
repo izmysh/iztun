@@ -1,0 +1,7 @@
+#!/bin/sh
+# networkd-dispatcher supplies IFACE for the link whose routability changed.
+case "${IFACE:-}" in
+    ''|lo|tailscale*|awg*) exit 0 ;;
+esac
+if [ -f "/etc/amneziawg/${IFACE}.conf" ]; then exit 0; fi
+systemctl start --no-block amneziawg-recover.service >/dev/null 2>&1 || true

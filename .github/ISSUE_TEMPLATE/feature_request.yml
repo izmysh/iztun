@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest a useful improvement to IZtun.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the real task that is difficult today.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Suggested behavior
+      description: How should it work? Keep the user flow simple.
+    validations:
+      required: true

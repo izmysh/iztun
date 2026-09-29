@@ -1,0 +1,1001 @@
+#!/usr/bin/python3
+"""Small privileged backend for AmneziaWG Linux GUI.
+
+The public surface is intentionally narrow: every profile name is validated,
+commands are executed without a shell. Only the explicit editor operation
+returns configuration secrets to an authorized local user.
+"""
+
+import fcntl
+import base64
+import binascii
+import grp
+import hashlib
+import io
+import ipaddress
+import json
+import os
+import pwd
+import re
+import shlex
+import socket
+import struct
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+from contextlib import contextmanager, redirect_stdout
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+CONFIG_DIR = Path("/etc/amneziawg")
+TRASH_DIR = CONFIG_DIR / ".trash"
+STATE_DIR = Path("/run/amneziawg-linux-gui")
+AWG = "/usr/bin/awg"
+AWG_QUICK = "/usr/bin/awg-quick"
+AWG_GO = "/usr/bin/amneziawg-go"
+SYSTEMCTL = "/usr/bin/systemctl"
+IP = "/usr/sbin/ip"
+HANDSHAKE_FRESH_SECONDS = 180
+MAX_CONFIG_BYTES = 65536
+MAX_REQUEST_BYTES = 400000
+SAFE_ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C",
+            "WG_QUICK_USERSPACE_IMPLEMENTATION": AWG_GO}
+PROFILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+=-]{0,14}$")
+FORBIDDEN = re.compile(
+    r"^\s*(?:PreUp|PostUp|PreDown|PostDown|SaveConfig)\s*=",
+    re.IGNORECASE | re.MULTILINE,
+)
+SECRET_LINE = re.compile(
+    r"^\s*(?:PrivateKey|PresharedKey|HeaderProtectionKey)\s*=.*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+LONG_TOKEN = re.compile(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{40,}={0,2}(?![A-Za-z0-9+/=])")
+IPV4 = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?![\w.])")
+IPV6 = re.compile(r"(?<![\w:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?::\d{1,5})?(?![\w:])")
+
+
+def run(args, *, check=True, timeout=10, input_text=None):
+    """Run one fixed argv command and return stripped stdout."""
+    try:
+        result = subprocess.run(
+            [str(arg) for arg in args],
+            input=input_text,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+            env=SAFE_ENV,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        if check:
+            raise RuntimeError(f"{Path(str(args[0])).name}: command unavailable or timed out") from exc
+        return ""
+    if check and result.returncode:
+        # Never forward engine output: parser errors may quote arbitrary secrets.
+        raise RuntimeError(f"{Path(str(args[0])).name}: command failed (exit {result.returncode})")
+    return result.stdout.strip()
+
+
+def profile_name(value):
+    value = str(value)
+    if not PROFILE_RE.fullmatch(value):
+        raise SystemExit("Invalid profile name")
+    return value
+
+
+def profile_path(name):
+    path = CONFIG_DIR / f"{profile_name(name)}.conf"
+    if path.is_symlink():
+        raise RuntimeError("Symbolic profile links are not accepted")
+    return path
+
+
+def unit_name(name):
+    return f"amneziawg@{profile_name(name)}.service"
+
+
+def ensure_dirs():
+    for directory in (CONFIG_DIR, TRASH_DIR, STATE_DIR):
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        info = directory.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid():
+            raise RuntimeError("Unsafe application directory")
+        directory.chmod(0o700)
+
+
+def read_regular(path, limit=MAX_CONFIG_BYTES, *, private=False):
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        with os.fdopen(fd, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+                raise RuntimeError("Expected a regular file within the size limit")
+            if private and (info.st_uid != 0 or info.st_mode & 0o077):
+                raise RuntimeError("Profile must be root-owned with mode 0600")
+            data = stream.read(limit + 1)
+        if len(data) > limit:
+            raise RuntimeError("File exceeds size limit")
+        return data.decode("utf-8")
+    except (OSError, UnicodeError):
+        raise RuntimeError("Cannot read a safe UTF-8 file; check permissions and file type") from None
+
+
+def validate_config(text):
+    """Validate the exact text passed to awg-quick; never interpret shell hooks."""
+    if not isinstance(text, str) or len(text.encode("utf-8")) > MAX_CONFIG_BYTES:
+        raise RuntimeError("Configuration is too large (maximum 64 KiB)")
+    if any(ord(c) < 32 and c not in "\r\n\t" for c in text):
+        raise RuntimeError("Configuration contains control characters")
+    interface_keys = set("address dns mtu table fwmark listenport privatekey jc jmin jmax s1 s2 s3 s4 h1 h2 h3 h4 i1 i2 i3 i4 i5 headerprotectionkey contentpaddingaddition rekeyaftertime rekeytimeout rejectaftertime keepalivetimeout maxhandshakeattempts randomtrailers disablecookies".split())
+    peer_keys = set("publickey presharedkey endpoint allowedips persistentkeepalive advancedsecurity".split())
+    section = None
+    interfaces = peers = 0
+    for raw in text.split("\n"):
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        if not line.isascii():
+            raise RuntimeError("Use ASCII characters in configuration directives and values")
+        if line.lower() in {"[interface]", "[peer]"}:
+            section = line.lower()
+            interfaces += section == "[interface]"
+            peers += section == "[peer]"
+            continue
+        key, sep, value = line.partition("=")
+        key, value = key.strip().lower(), value.strip()
+        if not re.fullmatch(r"[a-z][a-z0-9]*", key):
+            raise RuntimeError("Directive names cannot contain whitespace or punctuation")
+        if key in {"preup", "postup", "predown", "postdown", "saveconfig"}:
+            raise RuntimeError("Shell hooks and SaveConfig are forbidden")
+        if not sep or section is None or not key or not value:
+            raise RuntimeError("Malformed configuration line")
+        if key not in (interface_keys if section == "[interface]" else peer_keys):
+            raise RuntimeError("Unsupported directive or directive in the wrong section")
+        if key in {"privatekey", "publickey", "presharedkey", "headerprotectionkey"}:
+            try:
+                if len(base64.b64decode(value, validate=True)) != 32:
+                    raise ValueError()
+            except (ValueError, binascii.Error):
+                raise RuntimeError("Keys must be base64-encoded 32-byte values") from None
+        if key == "allowedips":
+            try:
+                for network in value.split(","):
+                    ipaddress.ip_network(network.strip(), strict=False)
+            except ValueError:
+                raise RuntimeError("Invalid AllowedIPs network") from None
+        if key == "dns":
+            for item in value.split(","):
+                item = item.strip()
+                try:
+                    ipaddress.ip_address(item)
+                except ValueError:
+                    if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9.])?", item):
+                        raise RuntimeError("Invalid DNS address or search domain") from None
+        if section == "[interface]":
+            if key == "table" and value not in {"auto", "off"}:
+                raise RuntimeError("Only automatic or disabled routing tables are supported")
+            if key == "fwmark" and value not in {"0", "off"}:
+                raise RuntimeError("Custom firewall marks are unsupported; routing is managed automatically")
+            if key == "mtu" and (not value.isdecimal() or not 576 <= int(value) <= 9000):
+                raise RuntimeError("MTU must be between 576 and 9000")
+            if key == "address":
+                try:
+                    for address in value.split(","):
+                        ipaddress.ip_interface(address.strip())
+                except ValueError:
+                    raise RuntimeError("Invalid interface address") from None
+    if interfaces != 1 or peers < 1 or peers > 64:
+        raise RuntimeError("Expected one Interface and 1–64 Peer sections")
+    return text
+
+
+def checked_profile(name):
+    path = profile_path(name)
+    validate_config(read_regular(path, private=True))
+    return path
+
+
+def atomic_private_write(path, text):
+    """Replace a file atomically without following links or loosening permissions."""
+    fd, temporary = tempfile.mkstemp(prefix=".write-", dir=path.parent)
+    temporary = Path(temporary)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(path)
+        parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(parent)
+        finally:
+            os.close(parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def label_path(name):
+    return CONFIG_DIR / f"{profile_name(name)}.name"
+
+
+def display_name(name):
+    path = label_path(name)
+    if path.is_symlink():
+        return name
+    try:
+        label = read_regular(path, 320).strip()
+        return label if label and len(label) <= 80 and all(ord(c) >= 32 for c in label) else name
+    except RuntimeError:
+        return name
+
+
+def protocol_hint(path, text=None):
+    if text is None:
+        text = read_regular(path)
+    if re.search(r"^\s*RandomTrailers\s*=", text, re.IGNORECASE | re.MULTILINE):
+        return "AWG 3.1"
+    if re.search(r"^\s*HeaderProtectionKey\s*=", text, re.IGNORECASE | re.MULTILINE):
+        return "AWG 3"
+    if re.search(r"^\s*I[1-5]\s*=", text, re.IGNORECASE | re.MULTILINE):
+        return "AWG 2"
+    return "AWG"
+
+
+def read_profile_metadata(path):
+    """Return non-secret facts parsed from a profile."""
+    text = read_regular(path)
+    validate_config(text)
+    allowed = []
+    peer_count = 0
+    dns_configured = False
+    keepalive = False
+    for raw_line in text.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        if line.lower() == "[peer]":
+            peer_count += 1
+            continue
+        if "=" not in line:
+            continue
+        key, value = (part.strip() for part in line.split("=", 1))
+        key = key.lower()
+        if key == "allowedips":
+            allowed.extend(item.strip() for item in value.split(","))
+        elif key == "dns" and value:
+            dns_configured = True
+        elif key == "persistentkeepalive" and value and value != "0":
+            keepalive = True
+    try:
+        networks = [ipaddress.ip_network(item, strict=False) for item in allowed]
+        full_tunnel = any(
+            net.prefixlen == 0
+            for version in (4, 6)
+            for net in ipaddress.collapse_addresses([n for n in networks if n.version == version])
+        )
+    except ValueError:
+        raise RuntimeError("Invalid AllowedIPs network") from None
+    return {
+        "protocol": protocol_hint(path, text),
+        "full_tunnel": full_tunnel,
+        "dns_configured": dns_configured,
+        "persistent_keepalive": keepalive,
+        "peer_count": peer_count,
+    }
+
+
+def profile_names():
+    if not CONFIG_DIR.exists():
+        return []
+    return sorted(path.stem for path in CONFIG_DIR.glob("*.conf") if PROFILE_RE.fullmatch(path.stem))
+
+
+def active_interfaces():
+    output = run([AWG, "show", "interfaces"])
+    return set(output.split())
+
+
+def service_properties(name):
+    output = run(
+        [SYSTEMCTL, "show", unit_name(name), "--property=ActiveState,SubState,Result,ExecMainStatus,UnitFileState", "--no-pager"],
+    )
+    values = {"ActiveState": "inactive", "SubState": "dead", "Result": "success", "ExecMainStatus": "0"}
+    for line in output.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    return values
+
+
+def services_snapshot(names):
+    if not names:
+        return {}
+    output = run([SYSTEMCTL, "show", *[unit_name(n) for n in names],
+                  "--property=Id,ActiveState,SubState,Result,ExecMainStatus,UnitFileState", "--no-pager"])
+    result = {}
+    for block in output.strip().split("\n\n"):
+        values = dict(line.split("=", 1) for line in block.splitlines() if "=" in line)
+        if values.get("Id"):
+            result[values["Id"]] = values
+    return result
+
+
+def peer_stats(name):
+    """Aggregate peer counters while retaining only one endpoint for status UI."""
+    fields = {"latest_handshake": 0, "rx": 0, "tx": 0, "endpoint": ""}
+    output = run([AWG, "show", name, "dump"])
+    for index, line in enumerate(output.splitlines()):
+        if index == 0:
+            continue
+        columns = line.split("\t")
+        if len(columns) < 8:
+            continue
+        try:
+            latest = int(columns[4])
+            fields["latest_handshake"] = max(fields["latest_handshake"], latest)
+            fields["rx"] += int(columns[5])
+            fields["tx"] += int(columns[6])
+        except ValueError:
+            continue
+        if not fields["endpoint"] and columns[2] not in {"", "(none)"}:
+            fields["endpoint"] = columns[2]
+    return fields
+
+
+def classify_health(interface_active, service, latest_handshake, last_error="", now=None):
+    now = int(time.time() if now is None else now)
+    service_active = service.get("ActiveState") == "active"
+    if last_error or service.get("ActiveState") == "failed" or (interface_active != service_active):
+        return "error"
+    if not interface_active:
+        return "disconnected"
+    if not latest_handshake:
+        return "waiting"
+    if max(0, now - int(latest_handshake)) > HANDSHAKE_FRESH_SECONDS:
+        return "stale"
+    return "connected"
+
+
+def error_path(name):
+    return STATE_DIR / f"{profile_name(name)}.error"
+
+
+def wanted_path(name):
+    return STATE_DIR / f"{profile_name(name)}.wanted"
+
+
+def paused_path(name):
+    return STATE_DIR / f"{profile_name(name)}.paused"
+
+
+def redact_text(text):
+    text = SECRET_LINE.sub("[secret removed]", str(text))
+    text = LONG_TOKEN.sub("[secret removed]", text)
+    text = IPV4.sub("[address removed]", text)
+    text = IPV6.sub("[address removed]", text)
+    return text.strip()[:4000]
+
+
+def read_last_error(name):
+    try:
+        return read_regular(error_path(name), 16000)
+    except RuntimeError:
+        return ""
+
+
+def store_last_error(name, message):
+    ensure_dirs()
+    path = error_path(name)
+    path.write_text(redact_text(message) or "Unknown connection error", encoding="utf-8")
+    path.chmod(0o600)
+
+
+def clear_last_error(name):
+    try:
+        error_path(name).unlink()
+    except FileNotFoundError:
+        pass
+
+
+def set_wanted(name, wanted):
+    ensure_dirs()
+    path = wanted_path(name)
+    if wanted:
+        path.touch(mode=0o600)
+        path.chmod(0o600)
+    else:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def is_wanted(name):
+    return wanted_path(name).exists()
+
+
+@contextmanager
+def operation_lock(nonblocking=False, name="operation", timeout=5):
+    """Serialize route/DNS mutations across socket and recovery processes."""
+    ensure_dirs()
+    with (STATE_DIR / f"{name}.lock").open("w", encoding="utf-8") as lock:
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if nonblocking:
+                    yield False
+                    return
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError("Network operation lock timed out; retry shortly")
+                time.sleep(min(0.05, remaining))
+        yield True
+
+
+def profile_record(name, interfaces=None, now=None, service=None):
+    path = profile_path(name)
+    metadata = read_profile_metadata(path)
+    interfaces = active_interfaces() if interfaces is None else interfaces
+    active = name in interfaces
+    service = service_properties(name) if service is None else service
+    stats = {"latest_handshake": 0, "rx": 0, "tx": 0, "endpoint": ""}
+    if active:
+        try:
+            stats = peer_stats(name)
+        except RuntimeError:
+            active = False
+    last_error = read_last_error(name)
+    latest = stats["latest_handshake"]
+    timestamp = int(time.time() if now is None else now)
+    age = max(0, timestamp - latest) if latest else None
+    return {
+        "name": name,
+        "label": display_name(name),
+        **metadata,
+        "active": active,
+        "service_active": service.get("ActiveState") == "active",
+        "enabled": service.get("UnitFileState") in {"enabled", "enabled-runtime"},
+        "health": "connecting" if service.get("ActiveState") == "activating" else classify_health(active, service, latest, last_error, timestamp),
+        "latest_handshake": latest,
+        "handshake_age": age,
+        "rx": stats["rx"],
+        "tx": stats["tx"],
+        "endpoint": stats["endpoint"],
+        "last_error": last_error,
+        "service": service,
+    }
+
+
+def cmd_list():
+    interfaces = active_interfaces()
+    names = profile_names()
+    services = services_snapshot(names)
+    records = []
+    for name in names:
+        service = services.get(unit_name(name))
+        try:
+            checked_profile(name)
+            records.append(profile_record(name, interfaces, service=service))
+        except (RuntimeError, OSError):
+            records.append({"name": name, "label": display_name(name), "protocol": "Invalid config",
+                            "active": name in interfaces, "service_active": False,
+                            "enabled": (service or {}).get("UnitFileState") in {"enabled", "enabled-runtime"},
+                            "health": "error", "full_tunnel": False, "rx": 0, "tx": 0,
+                            "latest_handshake": 0, "handshake_age": None,
+                            "last_error": "Invalid profile file. Check configuration and permissions."})
+    print(json.dumps(records))
+
+
+def find_full_tunnel_conflict(name):
+    interfaces = active_interfaces()
+    for other in profile_names():
+        if other != name and other in interfaces and read_profile_metadata(profile_path(other))["full_tunnel"]:
+            return other
+    return None
+
+
+def force_cleanup(name, path=None):
+    """Remove only state owned by one exact profile."""
+    name = profile_name(name)
+    path = Path(path) if path else profile_path(name)
+    checked_profile(name)
+    run([SYSTEMCTL, "stop", unit_name(name)], timeout=190)
+    if name in active_interfaces():
+        service_down(name)
+    if name in active_interfaces():
+        raise RuntimeError("Cleanup incomplete: tunnel is still present")
+
+
+def service_down(name):
+    path = checked_profile(name)
+    # Startup holds this lock for at most 100 seconds including rollback.
+    # The stop service allows another 35 seconds for awg-quick teardown.
+    with operation_lock(name="engine", timeout=120):
+        if name in active_interfaces():
+            run([AWG_QUICK, "down", path], timeout=35)
+
+
+def service_up(name):
+    """Shared guard for GUI, recovery AND simultaneous systemd boot jobs."""
+    with operation_lock(name="engine"):
+        path = checked_profile(name)
+        if name in active_interfaces():
+            raise RuntimeError("Interface already exists; use Repair connection")
+        metadata = read_profile_metadata(path)
+        if metadata["full_tunnel"]:
+            conflict = find_full_tunnel_conflict(name)
+            if conflict:
+                raise RuntimeError(f"Full-tunnel profile {conflict} is already active")
+            # awg-quick manages a shared suppress rule: do not disturb another VPN.
+            for family in ("-4", "-6"):
+                if "suppress_prefixlength 0" in run([IP, family, "rule", "show"]):
+                    raise RuntimeError("Another VPN owns full-tunnel policy routing; disconnect it first")
+        try:
+            run([AWG_QUICK, "up", path], timeout=40)
+            if name not in active_interfaces():
+                raise RuntimeError("Tunnel interface was not created")
+            if metadata["full_tunnel"]:
+                verify_handshake(name)
+        except Exception as exc:
+            if name in active_interfaces():
+                try:
+                    run([AWG_QUICK, "down", path], timeout=35)
+                except RuntimeError:
+                    store_last_error(name, "Cleanup incomplete. Use Repair connection before retrying.")
+                    raise RuntimeError("Activation failed and cleanup needs attention") from None
+            store_last_error(name, str(exc))
+            raise
+        clear_last_error(name)
+        set_wanted(name, True)
+
+
+def verify_handshake(name):
+    # A single harmless datagram triggers authentication, bound to the VPN device.
+    # TEST-NET is not an external health-check service; no reply is needed.
+    for family, destination in ((socket.AF_INET, "192.0.2.1"), (socket.AF_INET6, "2001:db8::1")):
+        try:
+            with socket.socket(family, socket.SOCK_DGRAM) as probe:
+                probe.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, name.encode() + b"\0")
+                probe.settimeout(1)
+                probe.sendto(b"", (destination, 9))
+        except OSError:
+            pass
+    deadline = time.monotonic() + 25
+    while time.monotonic() < deadline:
+        if peer_stats(name)["latest_handshake"]:
+            return
+        time.sleep(1)
+    raise RuntimeError("No authenticated handshake within 25 seconds")
+
+
+def start_profile(name, *, check_conflict=True):
+    name = profile_name(name)
+    path = checked_profile(name)
+    if not path.is_file():
+        raise RuntimeError("Profile does not exist")
+    metadata = read_profile_metadata(path)
+    if check_conflict and metadata["full_tunnel"]:
+        conflict = find_full_tunnel_conflict(name)
+        if conflict:
+            raise RuntimeError(
+                f"Cannot connect ‘{name}’: full-tunnel profile ‘{conflict}’ is already active. Disconnect it first."
+            )
+    service = service_properties(name)
+    if name in active_interfaces() and service.get("ActiveState") == "active":
+        clear_last_error(name)
+        set_wanted(name, True)
+        return
+    if name in active_interfaces() or service.get("ActiveState") in {"active", "failed"}:
+        force_cleanup(name, path)
+        run([SYSTEMCTL, "reset-failed", unit_name(name)], check=False)
+    try:
+        run([SYSTEMCTL, "start", unit_name(name)], timeout=95)
+        service = service_properties(name)
+        if name not in active_interfaces() or service.get("ActiveState") != "active":
+            raise RuntimeError("The tunnel service started without creating a usable interface")
+    except Exception as exc:
+        message = read_last_error(name) or redact_text(exc)
+        force_cleanup(name, path)
+        set_wanted(name, False)
+        store_last_error(name, message)
+        raise RuntimeError(f"Connection failed; network changes were rolled back. {message}") from exc
+    clear_last_error(name)
+    set_wanted(name, True)
+
+
+def cmd_up(name):
+    name = profile_name(name)
+    path = checked_profile(name)
+    conflict = find_full_tunnel_conflict(name) if read_profile_metadata(path)["full_tunnel"] else None
+    was_paused = paused_path(name).exists()
+    paused_path(name).unlink(missing_ok=True)
+    try:
+        if conflict:
+            # Pausing prevents network-change recovery from reviving the old VPN.
+            paused_path(conflict).touch(mode=0o600)
+            set_wanted(conflict, False)
+            force_cleanup(conflict)
+        start_profile(name)
+    except Exception as exc:
+        if was_paused or conflict:
+            paused_path(name).touch(mode=0o600)
+        if conflict:
+            try:
+                if name in active_interfaces():
+                    force_cleanup(name)
+                paused_path(conflict).unlink(missing_ok=True)
+                start_profile(conflict)
+            except Exception:
+                set_wanted(conflict, True)
+                store_last_error(conflict, "Previous tunnel could not be restored. Use Repair connection.")
+                raise RuntimeError("Switch failed; the previous tunnel could not be restored. Use Repair connection.") from None
+            raise RuntimeError("Switch failed; the previous tunnel was restored.") from exc
+        raise
+    print("Tunnel started; see handshake status")
+
+
+def cmd_down(name):
+    name = profile_name(name)
+    paused_path(name).touch(mode=0o600)
+    set_wanted(name, False)
+    force_cleanup(name)
+    clear_last_error(name)
+    run([SYSTEMCTL, "reset-failed", unit_name(name)], check=False)
+    print("Disconnected")
+
+
+def cmd_down_all():
+    for name in profile_names():
+        paused_path(name).touch(mode=0o600)
+        set_wanted(name, False)
+    for name in profile_names():
+        if name in active_interfaces() or service_properties(name).get("ActiveState") == "active":
+            force_cleanup(name)
+            clear_last_error(name)
+    print("All tunnels disconnected")
+
+
+def cmd_repair(name):
+    name = profile_name(name)
+    paused_path(name).unlink(missing_ok=True)
+    force_cleanup(name)
+    run([SYSTEMCTL, "reset-failed", unit_name(name)], check=False)
+    start_profile(name)
+    print("Connection repaired")
+
+
+def cmd_autostart(name, state):
+    name = profile_name(name)
+    checked_profile(name)
+    if state not in {"on", "off"}:
+        raise RuntimeError("Autostart state must be on or off")
+    verb = "enable" if state == "on" else "disable"
+    run([SYSTEMCTL, verb, unit_name(name)])
+    print(f"Autostart {state}")
+
+
+def cmd_import(text, name):
+    name = profile_name(name)
+    validate_config(text)
+    ensure_dirs()
+    if len(profile_names()) >= 128:
+        raise RuntimeError("Profile limit reached (128)")
+    destination = profile_path(name)
+    if destination.exists():
+        raise RuntimeError("A profile with this name already exists")
+    fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(text)
+    print("Profile imported")
+
+
+def cmd_rename(name, label):
+    checked_profile(name)
+    label = label.strip()
+    if not label or len(label) > 80 or any(ord(c) < 32 or ord(c) == 127 for c in label):
+        raise RuntimeError("Use a display name of 1–80 characters without control characters")
+    atomic_private_write(label_path(name), label)
+    print("Profile renamed")
+
+
+def cmd_read_config(name):
+    # Deliberately exposes keys only to the same local group that can manage VPNs.
+    text = read_regular(profile_path(name), private=True)
+    print(json.dumps({"text": text, "revision": hashlib.sha256(text.encode()).hexdigest()}))
+
+
+def cmd_save_config(name, payload):
+    update = json.loads(payload)
+    if not isinstance(update, dict) or not isinstance(update.get("revision"), str):
+        raise RuntimeError("Invalid configuration update")
+    text = validate_config(update.get("text"))
+    with operation_lock(name="engine"):
+        path = profile_path(name)
+        if name in active_interfaces() or service_properties(name).get("ActiveState") in {"active", "activating", "deactivating"}:
+            raise RuntimeError("Disconnect this profile before editing its configuration")
+        previous = read_regular(path, private=True)
+        if hashlib.sha256(previous.encode()).hexdigest() != update["revision"]:
+            raise RuntimeError("Configuration changed since the editor opened. Reopen it before saving.")
+        # Keep one protected last-known version, not an unbounded history of keys.
+        atomic_private_write(CONFIG_DIR / f"{name}.conf.previous", previous)
+        atomic_private_write(path, text)
+        clear_last_error(name)
+    print("Configuration saved")
+
+
+def cmd_delete(name):
+    name = profile_name(name)
+    path = profile_path(name)
+    if not path.exists():
+        raise RuntimeError("Profile does not exist")
+    set_wanted(name, False)
+    force_cleanup(name, path)
+    run([SYSTEMCTL, "disable", unit_name(name)], check=False)
+    ensure_dirs()
+    destination = TRASH_DIR / f"{name}-{time.time_ns()}.conf"
+    path.replace(destination)
+    destination.chmod(0o600)
+    for suffix in (".name", ".conf.previous"):
+        extra = CONFIG_DIR / f"{name}{suffix}"
+        if extra.exists() or extra.is_symlink():
+            extra.replace(TRASH_DIR / f"{name}-{time.time_ns()}{suffix}")
+    clear_last_error(name)
+    run([SYSTEMCTL, "reset-failed", unit_name(name)], check=False)
+    print("Profile moved to protected trash")
+
+
+def age_text(seconds):
+    if seconds is None:
+        return "never"
+    if seconds < 60:
+        return f"{seconds} seconds"
+    if seconds < 3600:
+        return f"{seconds // 60} minutes"
+    return f"{seconds // 3600} hours"
+
+
+def cmd_status(name):
+    record = profile_record(profile_name(name))
+    labels = {
+        "connected": "Connected",
+        "waiting": "Waiting for handshake",
+        "stale": "Handshake stale",
+        "error": "Connection problem",
+        "disconnected": "Disconnected",
+        "connecting": "Connecting",
+    }
+    lines = [
+        f"State: {labels[record['health']]}",
+        f"Protocol: {record['protocol']}",
+        f"Full tunnel: {'yes' if record['full_tunnel'] else 'no'}",
+        f"Autostart: {'on' if record['enabled'] else 'off'}",
+        f"Service: {record['service']['ActiveState']} ({record['service']['SubState']})",
+        f"Latest handshake: {age_text(record['handshake_age'])}",
+        f"Received: {record['rx']} bytes",
+        f"Sent: {record['tx']} bytes",
+    ]
+    if record["endpoint"]:
+        lines.append(f"Endpoint: {record['endpoint']}")
+    if record["last_error"]:
+        lines.append(f"Last error: {record['last_error']}")
+    print("\n".join(lines))
+
+
+def first_line(args):
+    value = run(args, check=False, timeout=10)
+    return value.splitlines()[0] if value else "unavailable"
+
+
+def os_pretty_name():
+    try:
+        text = Path("/etc/os-release").read_text(encoding="utf-8")
+    except OSError:
+        return "unknown"
+    for line in text.splitlines():
+        if line.startswith("PRETTY_NAME="):
+            return line.split("=", 1)[1].strip().strip('"')
+    return "unknown"
+
+
+def cmd_diagnostics(name):
+    name = profile_name(name)
+    record = profile_record(name)
+    service = record["service"]
+    nm_active = run([SYSTEMCTL, "is-active", "NetworkManager.service"], check=False) == "active"
+    default_route = bool(run([IP, "route", "show", "default"], check=False))
+    resolver = "/etc/resolv.conf"
+    try:
+        resolver_target = str(Path(resolver).resolve())
+    except OSError:
+        resolver_target = resolver
+    report = [
+        "IZtun diagnostic report",
+        f"Generated: {datetime.now(timezone.utc).isoformat(timespec='seconds')}",
+        "Profile: [omitted]",
+        f"System: {os_pretty_name()}",
+        f"Kernel: {first_line(['/usr/bin/uname', '-srmo'])}",
+        f"amneziawg-go: {first_line([AWG_GO, '--version'])}",
+        f"awg: {first_line([AWG, '--version'])}",
+        f"Protocol: {record['protocol']}",
+        f"Full tunnel: {'yes' if record['full_tunnel'] else 'no'}",
+        f"DNS configured in profile: {'yes' if record['dns_configured'] else 'no'}",
+        f"Persistent keepalive: {'yes' if record['persistent_keepalive'] else 'no'}",
+        f"Peer count: {record['peer_count']}",
+        f"Autostart: {'on' if record['enabled'] else 'off'}",
+        f"Interface present: {'yes' if record['active'] else 'no'}",
+        f"Health: {record['health']}",
+        f"Handshake age: {age_text(record['handshake_age'])}",
+        f"Traffic received: {record['rx']} bytes",
+        f"Traffic sent: {record['tx']} bytes",
+        f"Service ActiveState: {service['ActiveState']}",
+        f"Service SubState: {service['SubState']}",
+        f"Service Result: {service['Result']}",
+        f"Service exit status: {service['ExecMainStatus']}",
+        f"NetworkManager active: {'yes' if nm_active else 'no'}",
+        f"Default route present: {'yes' if default_route else 'no'}",
+        f"Resolver: {resolver_target}",
+        f"Last error recorded: {'yes' if record['last_error'] else 'no'}",
+        "",
+        "No configuration contents, keys or endpoint addresses are included.",
+    ]
+    print(redact_text("\n".join(report)))
+
+
+def recovery_candidates(records):
+    return sorted(
+        (r for r in records if not paused_path(r["name"]).exists()
+         and (r["active"] or r["service_active"] or r["enabled"] or is_wanted(r["name"]))),
+        key=lambda r: (not r["active"], not r["service_active"], r["name"]),
+    )
+
+
+def cmd_recover():
+    """Bounded retry after a real network event; honour manual Disconnect."""
+    stamp = STATE_DIR / "recover.stamp"
+    if stamp.exists() and time.time() - stamp.stat().st_mtime < 5:
+        return
+    stamp.touch(mode=0o600)
+    interfaces = active_interfaces()
+    candidates = recovery_candidates([profile_record(n, interfaces) for n in profile_names()])
+    selected_full = next((r["name"] for r in candidates if r["full_tunnel"]), None)
+    for record in candidates:
+        name = record["name"]
+        if record["full_tunnel"] and name != selected_full:
+            continue
+        for delay in (2, 5, 10):
+            time.sleep(delay)
+            # Lock each attempt separately: Disconnect can cancel subsequent attempts.
+            with operation_lock(nonblocking=True) as acquired:
+                if not acquired or paused_path(name).exists():
+                    break
+                try:
+                    force_cleanup(name)
+                    start_profile(name)
+                    break
+                except Exception as exc:
+                    set_wanted(name, True)
+                    store_last_error(name, f"Automatic recovery failed: {exc}")
+
+
+COMMANDS = {
+    "list": (cmd_list, 0),
+    "up": (cmd_up, 1),
+    "down": (cmd_down, 1),
+    "down-all": (cmd_down_all, 0),
+    "repair": (cmd_repair, 1),
+    "autostart": (cmd_autostart, 2),
+    "import": (cmd_import, 2),
+    "rename": (cmd_rename, 2),
+    "read-config": (cmd_read_config, 1),
+    "save-config": (cmd_save_config, 2),
+    "delete": (cmd_delete, 1),
+    "status": (cmd_status, 1),
+    "diagnostics": (cmd_diagnostics, 1),
+    "recover": (cmd_recover, 0),
+}
+MUTATING_COMMANDS = {"up", "down", "down-all", "repair", "autostart", "import", "delete", "rename", "save-config"}
+SOCKET_COMMANDS = set(COMMANDS) - {"recover"}
+
+
+def dispatch(args):
+    if not args or args[0] not in COMMANDS:
+        raise RuntimeError("Unsupported command")
+    function, count = COMMANDS[args[0]]
+    if len(args[1:]) != count:
+        raise RuntimeError("Invalid number of arguments")
+    if args[0] in MUTATING_COMMANDS:
+        with operation_lock(nonblocking=True) as acquired:
+            if not acquired:
+                raise RuntimeError("Another network operation is already in progress")
+            function(*args[1:])
+    else:
+        function(*args[1:])
+
+
+def peer_is_authorized(connection):
+    _pid, uid, gid = struct.unpack("3i", connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+    if uid == 0:
+        return True
+    try:
+        allowed_gid = grp.getgrnam("amneziawg").gr_gid
+    except KeyError:
+        return False
+    if gid == allowed_gid:
+        return True
+    try:
+        groups = os.getgrouplist(pwd.getpwuid(uid).pw_name, gid)
+    except (KeyError, OSError):
+        groups = []
+    return allowed_gid in groups
+
+
+def serve_connection(connection):
+    response = {"ok": False, "output": ""}
+    try:
+        if not peer_is_authorized(connection):
+            raise RuntimeError("Access denied")
+        deadline = time.monotonic() + 5
+        data = bytearray()
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise RuntimeError("Request read deadline exceeded")
+            connection.settimeout(remaining)
+            chunk = connection.recv(65536)
+            if not chunk:
+                break
+            data.extend(chunk)
+            if len(data) > MAX_REQUEST_BYTES:
+                raise RuntimeError("Request too large")
+        request = json.loads(data.decode("utf-8"))
+        if not isinstance(request, dict):
+            raise RuntimeError("Malformed request")
+        args = request.get("args")
+        if not isinstance(args, list) or not args or len(args) > 3 or not all(isinstance(item, str) for item in args):
+            raise RuntimeError("Malformed request")
+        if args[0] not in SOCKET_COMMANDS:
+            raise RuntimeError("Unsupported command")
+        captured = io.StringIO()
+        with redirect_stdout(captured):
+            dispatch(args)
+        response = {"ok": True, "output": captured.getvalue().strip()}
+    except (RuntimeError, SystemExit) as exc:
+        response = {"ok": False, "error": redact_text(exc)}
+    except Exception:
+        response = {"ok": False, "error": "Request failed. Check service state and profile permissions."}
+    try:
+        connection.settimeout(5)
+        connection.sendall((json.dumps(response) + "\n").encode("utf-8"))
+    except OSError:
+        pass
+
+
+def main():
+    ensure_dirs()
+    if len(sys.argv) > 1 and sys.argv[1] == "--socket":
+        with socket.fromfd(sys.stdin.fileno(), socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+            serve_connection(connection)
+        return 0
+    try:
+        if len(sys.argv) == 3 and sys.argv[1] in {"service-up", "service-down"}:
+            {"service-up": service_up, "service-down": service_down}[sys.argv[1]](profile_name(sys.argv[2]))
+            return 0
+        dispatch(sys.argv[1:])
+        return 0
+    except (RuntimeError, SystemExit) as exc:
+        print(redact_text(exc), file=sys.stderr)
+        return 1
+    except Exception:
+        print("Operation failed; check profile permissions and service state", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

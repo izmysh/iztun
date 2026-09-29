@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=IZtun
+Comment=Independent lightweight AmneziaWG client
+Exec=iztun
+Icon=network-vpn
+Terminal=false
+Categories=Network;Security;
+Keywords=IZtun;VPN;WireGuard;AmneziaWG;AWG;
+StartupNotify=true

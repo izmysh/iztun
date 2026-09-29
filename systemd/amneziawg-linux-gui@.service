@@ -1,0 +1,36 @@
+[Unit]
+Description=AmneziaWG Linux GUI command helper
+
+[Service]
+Type=exec
+ExecStart=/usr/libexec/amneziawg-linux-gui-helper --socket
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+KillMode=control-group
+# Switching includes disconnect, handshake and restoration of the previous VPN.
+RuntimeMaxSec=420
+MemoryMax=128M
+TasksMax=16
+UMask=0077
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/etc/amneziawg /run/amneziawg-linux-gui
+RuntimeDirectory=amneziawg-linux-gui
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_DAC_OVERRIDE
+AmbientCapabilities=CAP_NET_ADMIN CAP_DAC_OVERRIDE

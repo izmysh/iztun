@@ -1,0 +1,15 @@
+[Unit]
+Description=AmneziaWG Linux GUI privileged command socket
+
+[Socket]
+ListenStream=/run/amneziawg-linux-gui.sock
+SocketMode=0660
+SocketUser=root
+SocketGroup=amneziawg
+Accept=yes
+MaxConnections=8
+MaxConnectionsPerSource=4
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

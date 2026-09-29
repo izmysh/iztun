@@ -1,0 +1,6 @@
+[submodule "upstream/amneziawg-go"]
+	path = upstream/amneziawg-go
+	url = https://github.com/amnezia-vpn/amneziawg-go.git
+[submodule "upstream/amneziawg-tools"]
+	path = upstream/amneziawg-tools
+	url = https://github.com/amnezia-vpn/amneziawg-tools.git
