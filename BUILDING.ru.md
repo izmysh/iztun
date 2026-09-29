@@ -32,9 +32,9 @@ sudo apt install build-essential binutils pkg-config dpkg-dev git golang-go \
 Скачайте полный архив исходников и контрольную сумму из нужного релиза:
 
 ```bash
-sha256sum -c iztun-0.3.1-source.tar.gz.sha256
-tar -xzf iztun-0.3.1-source.tar.gz
-cd iztun-0.3.1
+sha256sum -c iztun-0.3.2-source.tar.gz.sha256
+tar -xzf iztun-0.3.2-source.tar.gz
+cd iztun-0.3.2
 sha256sum -c SOURCE-MANIFEST.sha256
 ```
 
@@ -55,7 +55,7 @@ cd IZtun
 
 ```bash
 make engine
-file build/engine/amneziawg-go build/engine/awg
+readelf -h build/engine/amneziawg-go build/engine/awg
 build/engine/amneziawg-go --version
 build/engine/awg --version
 ```
@@ -111,18 +111,17 @@ make source-bundle
 Готовые файлы:
 
 ```text
-dist/amneziawg-linux-gui_0.3.1_arm64.deb
-dist/amneziawg-linux-gui_0.3.1_arm64.deb.sha256
-dist/iztun-0.3.1-source.tar.gz
-dist/iztun-0.3.1-source.tar.gz.sha256
+dist/iztun_0.3.2_arm64.deb
+dist/iztun_0.3.2_arm64.deb.sha256
+dist/iztun-0.3.2-source.tar.gz
+dist/iztun-0.3.2-source.tar.gz.sha256
 ```
 
 Установите полученный пакет:
 
 ```bash
-sudo apt install ./dist/amneziawg-linux-gui_0.3.1_arm64.deb
-sudo amneziawg-linux-gui-setup-user "$USER"
-# Выйдите из сеанса и войдите снова, затем запустите:
+sudo apt install ./dist/iztun_0.3.2_arm64.deb
+# Откройте IZtun и при необходимости подтвердите настройку доступа:
 iztun
 ```
 

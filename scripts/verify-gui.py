@@ -110,6 +110,33 @@ class GuiTests(unittest.TestCase):
     def settle(self):
         pump_until(lambda: not self.app.pending_calls and not self.app.busy and not self.app.refreshing)
 
+    def test_setup_cancel_has_no_privileged_effects(self):
+        with patch.object(gui.Gtk, "MessageDialog") as dialog, patch.object(gui.subprocess, "Popen") as spawn:
+            dialog.return_value.run.return_value = Gtk.ResponseType.CANCEL
+            self.assertEqual(gui.authorize_session(), 1)
+            spawn.assert_not_called()
+
+    def test_setup_authorization_result(self):
+        for code in (0, 126):
+            with self.subTest(code=code), patch.object(gui.Gtk, "MessageDialog") as dialog, \
+                 patch.object(gui.Path, "is_file", return_value=False), patch.object(gui.subprocess, "Popen") as spawn:
+                dialog.return_value.run.return_value = Gtk.ResponseType.OK
+                spawn.return_value.poll.return_value = code
+                self.assertEqual(gui.authorize_session(), 0 if code == 0 else 1)
+                self.assertEqual(spawn.call_args.args[0][:3],
+                                 ["/usr/bin/pkexec", "--disable-internal-agent", "/usr/libexec/iztun-session-setup"])
+
+    def test_access_requires_registered_and_current_session_group(self):
+        from types import SimpleNamespace
+        with patch.object(gui.grp, "getgrnam", return_value=SimpleNamespace(gr_gid=982, gr_mem=["demo"])), \
+             patch.object(gui.pwd, "getpwuid", return_value=SimpleNamespace(pw_gid=1000, pw_name="demo")), \
+             patch.object(gui.os, "getgid", return_value=1000), patch.object(gui.os, "getgroups", return_value=[1000]):
+            self.assertFalse(gui.session_access_ready())
+            with patch.object(gui.os, "getgroups", return_value=[1000, 982]):
+                self.assertTrue(gui.session_access_ready())
+                with patch.object(gui.grp, "getgrnam", return_value=SimpleNamespace(gr_gid=982, gr_mem=[])):
+                    self.assertFalse(gui.session_access_ready())
+
     def editor(self):
         self.app.edit_profile(None, "test")
         pump_until(lambda: self.app.editor is not None)

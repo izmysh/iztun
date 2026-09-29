@@ -34,7 +34,7 @@ engine:
 	chmod 0755 "$(ENGINE_BUILD)/amneziawg-go" "$(ENGINE_BUILD)/awg" "$(ENGINE_BUILD)/awg-quick"
 
 test:
-	$(PYTHON) -m py_compile src/amneziawg-linux-gui src/amneziawg-linux-gui-helper
+	$(PYTHON) -m py_compile src/amneziawg-linux-gui src/amneziawg-linux-gui-helper src/iztun-session-setup
 	$(PYTHON) -m unittest discover -s tests -v
 
 audit:
@@ -43,10 +43,12 @@ audit:
 install:
 	test -x "$(ENGINE_BUILD)/amneziawg-go"
 	test -x "$(ENGINE_BUILD)/awg"
-	install -Dm0755 src/amneziawg-linux-gui "$(DESTDIR)$(PREFIX)/bin/amneziawg-linux-gui"
-	ln -sfn amneziawg-linux-gui "$(DESTDIR)$(PREFIX)/bin/iztun"
+	install -Dm0755 src/amneziawg-linux-gui "$(DESTDIR)$(PREFIX)/bin/iztun"
+	ln -sfn iztun "$(DESTDIR)$(PREFIX)/bin/amneziawg-linux-gui"
 	install -Dm0755 src/amneziawg-linux-gui-helper "$(DESTDIR)$(PREFIX)/libexec/amneziawg-linux-gui-helper"
 	install -Dm0755 src/amneziawg-linux-gui-setup-user "$(DESTDIR)$(PREFIX)/sbin/amneziawg-linux-gui-setup-user"
+	install -Dm0755 src/iztun-session-setup "$(DESTDIR)$(PREFIX)/libexec/iztun-session-setup"
+	install -Dm0644 data/io.github.amneziawg_linux_gui.setup.policy "$(DESTDIR)$(PREFIX)/share/polkit-1/actions/io.github.amneziawg_linux_gui.setup.policy"
 	install -Dm0755 "$(ENGINE_BUILD)/amneziawg-go" "$(DESTDIR)$(PREFIX)/bin/amneziawg-go"
 	install -Dm0755 "$(ENGINE_BUILD)/awg" "$(DESTDIR)$(PREFIX)/bin/awg"
 	install -Dm0755 "$(ENGINE_BUILD)/awg-quick" "$(DESTDIR)$(PREFIX)/bin/awg-quick"

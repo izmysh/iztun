@@ -4,7 +4,7 @@ set -eu
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 version=$(cat "$project_dir/VERSION")
 architecture=arm64
-package_name=amneziawg-linux-gui
+package_name=iztun
 
 if [ "$(uname -m)" != "aarch64" ]; then
     echo "build-deb.sh must run on an ARM64 Linux host or ARM64 GitHub runner." >&2
@@ -32,8 +32,9 @@ Priority: optional
 Architecture: $architecture
 Installed-Size: $installed_size
 Maintainer: IZtun contributors
-Depends: bash, libc6 (>= $libc_min), iproute2, iptables, python3, python3-gi, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1, systemd, resolvconf | openresolv
-Conflicts: amneziawg-tools, amneziawg-go
+Depends: bash, libc6 (>= $libc_min), iproute2, iptables, python3, python3-gi, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1, systemd, pkexec, policykit-1-gnome, passwd, resolvconf | openresolv
+Conflicts: amneziawg-linux-gui, amneziawg-tools, amneziawg-go
+Replaces: amneziawg-linux-gui
 Recommends: resolvconf | openresolv
 Description: IZtun - independent lightweight GTK client for AmneziaWG
  A small desktop client for importing and controlling AmneziaWG profiles on
@@ -54,8 +55,7 @@ if [ -d /run/systemd/system ]; then
     systemctl daemon-reload
     systemctl enable --now amneziawg-linux-gui.socket
 fi
-echo "Run: sudo amneziawg-linux-gui-setup-user USERNAME"
-echo "Then sign out and sign back in."
+echo "Open IZtun from your application menu. First-launch access setup is automatic."
 EOF
 
 cat >"$stage/DEBIAN/prerm" <<'EOF'

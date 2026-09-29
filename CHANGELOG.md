@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2
+
+- rename the Debian package to `iztun`, replacing the legacy package on installation;
+- bundle administrator-approved first-launch access setup; no manual group command or logout;
+- keep the GUI unprivileged and retain the private command socket;
+- explain the bundled VPN engine, upstream links and independent frontend status in both READMEs;
+- use the declared binutils dependency for build-guide architecture checks.
+
 ## 0.3.1
 
 - simplify both READMEs: two commands for the Debian package and one source installer command;

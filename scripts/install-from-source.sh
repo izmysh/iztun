@@ -18,7 +18,6 @@ if [ ! -f "$project_dir/upstream/amneziawg-go/go.mod" ]; then
     git -C "$project_dir" submodule update --init --recursive
 fi
 make -C "$project_dir" deb
-sudo apt-get install -y "$project_dir/dist/amneziawg-linux-gui_$(cat "$project_dir/VERSION")_arm64.deb"
-sudo amneziawg-linux-gui-setup-user "${SUDO_USER:-$(id -un)}"
+sudo apt-get install -y "$project_dir/dist/iztun_$(cat "$project_dir/VERSION")_arm64.deb"
 
-echo "Installation completed. Sign out and sign back in once before launching the GUI."
+echo "Installation completed. Open IZtun; it will request administrator approval if access needs setup."
