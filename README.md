@@ -2,7 +2,7 @@
 
 # IZtun
 
-**A lightweight AmneziaWG-GO desktop client for ARM64 Linux.** Developed by **IZMYSH**.
+**A lightweight AmneziaWG desktop client for ARM64 Linux.** Developed by **IZMYSH**.
 
 Import a VPN configuration, connect and manage profiles from a native GTK window or the system tray.
 
