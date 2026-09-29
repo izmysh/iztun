@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- simplify both READMEs: two commands for the Debian package and one source installer command;
+- move separate ARM64 engine compilation and contributor checks to dedicated build guides;
+- use plain hyphens and normalize Russian documentation typography;
+- include both build guides in packages and source archives.
+
 ## 0.3.0
 
 - provide English and Russian READMEs with language links;

@@ -19,11 +19,11 @@ The package does not support x86-64 or 32-bit ARM.
 
 ## Install
 
-1. Download [the ARM64 .deb](https://github.com/izmysh/iztun/releases/download/v0.3.0/amneziawg-linux-gui_0.3.0_arm64.deb).
+1. Download [the ARM64 .deb](https://github.com/izmysh/iztun/releases/download/v0.3.1/amneziawg-linux-gui_0.3.1_arm64.deb).
 2. Open a terminal in the folder containing the downloaded file and run:
 
 ```bash
-sudo apt install ./amneziawg-linux-gui_0.3.0_arm64.deb
+sudo apt install ./amneziawg-linux-gui_0.3.1_arm64.deb
 sudo amneziawg-linux-gui-setup-user "$USER"
 ```
 
@@ -52,7 +52,7 @@ or disconnection.
 
 ## Install from source
 
-Download [the complete source archive](https://github.com/izmysh/iztun/releases/download/v0.3.0/iztun-0.3.0-source.tar.gz)
+Download [the complete source archive](https://github.com/izmysh/iztun/releases/download/v0.3.1/iztun-0.3.1-source.tar.gz)
 and unpack it with your file manager. Open a terminal inside the unpacked folder
 and run this **as your regular user**:
 

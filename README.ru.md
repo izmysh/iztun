@@ -19,11 +19,11 @@ Orange Pi 5 с ARM64 Armbian/Ubuntu. Другие ARM64-платы могут р
 
 ## Установка
 
-1. Скачайте [пакет .deb для ARM64](https://github.com/izmysh/iztun/releases/download/v0.3.0/amneziawg-linux-gui_0.3.0_arm64.deb).
+1. Скачайте [пакет .deb для ARM64](https://github.com/izmysh/iztun/releases/download/v0.3.1/amneziawg-linux-gui_0.3.1_arm64.deb).
 2. Откройте терминал в папке со скачанным файлом и выполните:
 
 ```bash
-sudo apt install ./amneziawg-linux-gui_0.3.0_arm64.deb
+sudo apt install ./amneziawg-linux-gui_0.3.1_arm64.deb
 sudo amneziawg-linux-gui-setup-user "$USER"
 ```
 
@@ -52,7 +52,7 @@ sudo amneziawg-linux-gui-setup-user "$USER"
 
 ## Установка из исходников
 
-Скачайте [полный архив исходников](https://github.com/izmysh/iztun/releases/download/v0.3.0/iztun-0.3.0-source.tar.gz)
+Скачайте [полный архив исходников](https://github.com/izmysh/iztun/releases/download/v0.3.1/iztun-0.3.1-source.tar.gz)
 и распакуйте его через файловый менеджер. Откройте терминал в распакованной
 папке и выполните **от обычного пользователя** одну команду:
 

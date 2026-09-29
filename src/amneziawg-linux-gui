@@ -22,7 +22,7 @@ from gi.repository import GLib, Gdk, Gtk, Pango
 
 
 APP_ID = "io.github.amneziawg_linux_gui.Client"
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 HELPER_SOCKET = "/run/amneziawg-linux-gui.sock"
 MAX_CONFIG_BYTES = 65536
 MAX_REQUEST_BYTES = 400000

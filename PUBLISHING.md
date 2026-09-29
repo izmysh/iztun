@@ -41,9 +41,9 @@ Publishing can be done on x86-64; building the supplied binary requires ARM64.
 mkdir -p ~/Projects
 cd ~/Projects
 # Put the source archive and checksum here first.
-sha256sum -c iztun-0.3.0-source.tar.gz.sha256
-tar -xzf iztun-0.3.0-source.tar.gz
-cd iztun-0.3.0
+sha256sum -c iztun-0.3.1-source.tar.gz.sha256
+tar -xzf iztun-0.3.1-source.tar.gz
+cd iztun-0.3.1
 sha256sum -c SOURCE-MANIFEST.sha256
 
 git init -b main
@@ -125,11 +125,11 @@ following release paths so two jobs do not try to publish the same tag.
 
 ### Automatic GitHub Actions release
 
-Confirm both `VERSION` and the GUI constant say `0.3.0`, then:
+Confirm both `VERSION` and the GUI constant say `0.3.1`, then:
 
 ```bash
-git tag -a v0.3.0 -m "IZtun 0.3.0"
-git push origin v0.3.0
+git tag -a v0.3.1 -m "IZtun 0.3.1"
+git push origin v0.3.1
 ```
 
 The `v*` workflow builds an ARM64 package and source archive. Watch Actions until
@@ -142,13 +142,13 @@ first to avoid a race. Open **Releases → Draft a new release**, select/create 
 version tag and attach:
 
 ```text
-amneziawg-linux-gui_0.3.0_arm64.deb
-amneziawg-linux-gui_0.3.0_arm64.deb.sha256
-iztun-0.3.0-source.tar.gz
-iztun-0.3.0-source.tar.gz.sha256
+amneziawg-linux-gui_0.3.1_arm64.deb
+amneziawg-linux-gui_0.3.1_arm64.deb.sha256
+iztun-0.3.1-source.tar.gz
+iztun-0.3.1-source.tar.gz.sha256
 ```
 
-Use title **IZtun 0.3.0**. State supported architecture, tested OS, changes,
+Use title **IZtun 0.3.1**. State supported architecture, tested OS, changes,
 limitations and checksum verification. Mark experimental builds **pre-release**.
 These are applications, not Orange Pi firmware images.
 

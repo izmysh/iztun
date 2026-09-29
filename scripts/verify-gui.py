@@ -33,6 +33,8 @@ loader.exec_module(gui)
 Gtk, GLib = gui.Gtk, gui.GLib
 from gi.repository import Gio
 
+EXPECTED_VERSION = (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
+
 
 def children(widget):
     yield widget
@@ -117,7 +119,7 @@ class GuiTests(unittest.TestCase):
 
     def test_layout_and_in_place_updates(self):
         app = self.app
-        self.assertEqual(gui.APP_VERSION, "0.3.0")
+        self.assertEqual(gui.APP_VERSION, EXPECTED_VERSION)
         self.assertEqual(app.window.get_title(), "IZtun")
         self.assertEqual(app.window.get_titlebar().get_title(), "IZtun")
         self.assertFalse(app.window.get_titlebar().get_subtitle())
@@ -460,7 +462,7 @@ class GuiTests(unittest.TestCase):
         dialog = self.app.dialog
         self.assertTrue(dialog.get_modal())
         labels = [w.get_text() for w in children(dialog) if isinstance(w, Gtk.Label)]
-        self.assertIn("IZtun 0.3.0", labels)
+        self.assertIn(f"IZtun {EXPECTED_VERSION}", labels)
         self.assertIn("IZtun is a lightweight GUI frontend for AmneziaWG-GO on ARM64 Linux systems.", labels)
         self.assertIn("Developed by IZMYSH", labels)
         link = next(w for w in children(dialog) if isinstance(w, Gtk.LinkButton))
