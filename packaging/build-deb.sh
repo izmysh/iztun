@@ -32,7 +32,7 @@ Priority: optional
 Architecture: $architecture
 Installed-Size: $installed_size
 Maintainer: IZtun contributors
-Depends: bash, libc6 (>= $libc_min), iproute2, iptables, python3, python3-gi, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1, systemd, pkexec, policykit-1-gnome, passwd, resolvconf | openresolv
+Depends: bash, libc6 (>= $libc_min), iproute2, iptables, python3, python3-gi, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1, systemd, sudo, ssh-askpass-gnome, passwd, resolvconf | openresolv
 Conflicts: amneziawg-linux-gui, amneziawg-tools, amneziawg-go
 Replaces: amneziawg-linux-gui
 Recommends: resolvconf | openresolv

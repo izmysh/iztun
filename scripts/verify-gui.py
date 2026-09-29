@@ -119,12 +119,14 @@ class GuiTests(unittest.TestCase):
     def test_setup_authorization_result(self):
         for code in (0, 126):
             with self.subTest(code=code), patch.object(gui.Gtk, "MessageDialog") as dialog, \
-                 patch.object(gui.Path, "is_file", return_value=False), patch.object(gui.subprocess, "Popen") as spawn:
+                 patch.object(gui.subprocess, "Popen") as spawn:
                 dialog.return_value.run.return_value = Gtk.ResponseType.OK
                 spawn.return_value.poll.return_value = code
                 self.assertEqual(gui.authorize_session(), 0 if code == 0 else 1)
-                self.assertEqual(spawn.call_args.args[0][:3],
-                                 ["/usr/bin/pkexec", "--disable-internal-agent", "/usr/libexec/iztun-session-setup"])
+                self.assertEqual(spawn.call_args.args[0][:4],
+                                 ["/usr/bin/sudo", "-A", "--", "/usr/libexec/iztun-session-setup"])
+                self.assertEqual(spawn.call_args.kwargs["env"]["SUDO_ASKPASS"],
+                                 "/usr/lib/openssh/gnome-ssh-askpass")
 
     def test_access_requires_registered_and_current_session_group(self):
         from types import SimpleNamespace

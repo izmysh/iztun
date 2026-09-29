@@ -15,12 +15,12 @@ Report a vulnerability** function to open a private security advisory.
 - The graphical application is unprivileged.
 - Administrative operations go through a root-owned Unix socket.
 - Access is limited to members of the `amneziawg` system group.
-- First-launch setup requires an explicit Polkit administrator authorization.
-  The setup program obtains the account from `PKEXEC_UID`, validates its local
+- First-launch setup requires an explicit sudo administrator authorization.
+  The setup program obtains the account from `SUDO_UID`, validates its local
   desktop session, adds only that account and starts the fixed installed GUI
   with its UID, GID and supplementary groups. The GUI is never run as root.
-  Setup does not import profiles or start a VPN. The temporary authentication
-  agent is stopped when authorization completes or is cancelled.
+  Setup does not import profiles or start a VPN. The standard OpenSSH GTK askpass
+  handles password entry for sudo; IZtun never receives or stores that password.
 - The helper obtains the real caller UID from `SO_PEERCRED`; it does not trust
   a username sent by the GUI.
 - The unprivileged GUI reads a regular `.conf` file and sends its contents.

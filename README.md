@@ -12,6 +12,7 @@ Import a VPN configuration, connect and manage profiles from a native GTK window
 
 An ARM64 Debian/Ubuntu/Armbian system with systemd and a desktop, plus a working
 AmneziaWG server and its client `.conf` file.
+Your desktop account needs sudo permission for the one-time access setup.
 
 The ready-made package needs **glibc 2.38 or newer**. Tested on Orange Pi 5 with
 ARM64 Armbian/Ubuntu. Other ARM64 boards may work but have not been validated.
@@ -27,7 +28,7 @@ sudo apt install ./iztun_0.3.2_arm64.deb
 ```
 
 3. Open **IZtun** from the application menu. If access is not yet configured, click
-   **Authorize** and approve the administrator password dialog. No commands or logout are needed.
+   **Authorize** and enter your sudo password if requested. No commands or logout are needed.
 
 **No separate engine installation or compilation is needed.** The `.deb` already
 includes ARM64 builds of [AmneziaWG-GO](https://github.com/amnezia-vpn/amneziawg-go)

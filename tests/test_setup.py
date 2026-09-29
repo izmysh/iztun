@@ -19,7 +19,7 @@ class SetupTests(unittest.TestCase):
         self.account = SimpleNamespace(pw_uid=1000, pw_gid=1000, pw_name="demo", pw_dir="/home/demo")
         patches = [
             patch.object(setup.os, "getuid", return_value=0),
-            patch.dict(os.environ, {"PKEXEC_UID": "1000", "LD_PRELOAD": "untrusted"}, clear=True),
+            patch.dict(os.environ, {"SUDO_UID": "1000", "LD_PRELOAD": "untrusted"}, clear=True),
             patch.object(setup.pwd, "getpwuid", return_value=self.account),
             patch.object(Path, "lstat", return_value=SimpleNamespace(st_mode=stat.S_IFDIR | 0o700, st_uid=1000)),
             patch.object(Path, "stat", return_value=SimpleNamespace(st_mode=stat.S_IFSOCK | 0o600, st_uid=1000)),
@@ -55,7 +55,7 @@ class SetupTests(unittest.TestCase):
 
     def test_requires_non_root_caller_uid(self):
         for value in ("", "0", "-1", "demo", "1000;evil", "9999999999"):
-            with self.subTest(uid=value), patch.dict(os.environ, {"PKEXEC_UID": value}):
+            with self.subTest(uid=value), patch.dict(os.environ, {"SUDO_UID": value}):
                 self.rejected(["wayland-0", "", ""])
 
     def test_runtime_owner_mode_and_type(self):
@@ -80,7 +80,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual((arguments["user"], arguments["group"], arguments["extra_groups"]), (1000, 1000, [1000, 982]))
         self.assertEqual(arguments["cwd"], "/home/demo")
         self.assertNotIn("LD_PRELOAD", arguments["env"])
-        self.assertNotIn("PKEXEC_UID", arguments["env"])
+        self.assertNotIn("SUDO_UID", arguments["env"])
         self.assertEqual(arguments["env"]["WAYLAND_DISPLAY"], "wayland-0")
 
     def test_failed_group_setup_never_launches_gui(self):
@@ -100,13 +100,10 @@ class SetupTests(unittest.TestCase):
             setup.setup(["wayland-0", "", ""])
         self.spawn.return_value.terminate.assert_called_once()
 
-    def test_package_identity_and_policy(self):
+    def test_package_identity_and_authorization_dependencies(self):
         self.cgroup_hook.stop()
         root = source.parents[1]
         package = (root / "packaging/build-deb.sh").read_text()
         self.assertIn("package_name=iztun", package)
         self.assertIn("Replaces: amneziawg-linux-gui", package)
-        policy = (root / "data/io.github.amneziawg_linux_gui.setup.policy").read_text()
-        self.assertIn("<allow_any>no</allow_any>", policy)
-        self.assertNotIn("<allow_active>yes", policy)
-        self.assertIn("/usr/libexec/iztun-session-setup", policy)
+        self.assertIn("sudo, ssh-askpass-gnome", package)

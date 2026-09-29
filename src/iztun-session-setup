@@ -13,7 +13,7 @@ from pathlib import Path
 def setup(arguments):
     if os.getuid() != 0 or len(arguments) != 3:
         raise RuntimeError("Administrator authorization required")
-    raw_uid = os.environ.get("PKEXEC_UID", "")
+    raw_uid = os.environ.get("SUDO_UID", "")
     if not re.fullmatch(r"[0-9]{1,10}", raw_uid) or not 0 < int(raw_uid) < 2**32 - 1:
         raise RuntimeError("No desktop user")
     account = pwd.getpwuid(int(raw_uid))
