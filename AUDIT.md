@@ -1,36 +1,17 @@
 # Security and deployment review
 
-## 0.3.2 installation and authorization review - 2026-09-30
+## 0.3.2 authorization review - 2026-09-30
 
-- The Debian package is now `iztun`. Migration from the legacy
-  `amneziawg-linux-gui` package preserved existing profiles and source trees.
 - First-launch setup uses sudo's standard graphical askpass prompt. IZtun does
   not receive the password. The fixed setup command derives the account from
   `SUDO_UID`, validates the local session, grants the documented group access,
   and drops UID, GID and supplementary groups before launching the GUI.
-- Actual first-launch authorization was completed in the Orange Pi's Wayland
-  session. The resulting GUI ran as `opi` in a separate user scope, without
-  logout or a manual group command. Cancelled/failed setup starts no VPN.
-- 75 backend/packaging tests and 25 GTK tests passed on ARM64. The GTK tests
-  exercised the installed executable in the real Wayland session. CI passed
-  the same suites on an ARM64 Ubuntu runner.
-- Clean installation of the CI-built `iztun_0.3.2_arm64.deb` was checked on
-  Orange Pi 5: the old GUI, Go engine and command-line tools were removed first.
-  The package restored all three without compiling anything or separately
-  installing the engine. Source trees and build tools were retained.
-- Installed socket checks as the ordinary user authenticated AWG 2, transferred
-  HTTPS traffic explicitly through its interface, repaired the connection,
-  and switched to AWG 3.1 with exactly one authenticated full tunnel.
-- Disconnect left both tunnels inactive. Profile hashes, IPv4/IPv6 routes,
-  policy rules and DNS matched the pre-test snapshot. Diagnostics checks found
-  no key-like values or IP addresses in the exported test report.
 - The native ARM64 engine dependency scan again reported no vulnerabilities in
   called code or imported packages. The 30 module-metadata-only advisories and
   the limitations described below still apply.
 
-This validates a clean application reinstall on an existing system, not an
-installation on a freshly provisioned OS. Other ARM64 boards, physical suspend,
-reboot and arbitrary failure timing have not been validated in this run.
+Other ARM64 boards, physical suspend, reboot and arbitrary failure timing have
+not been validated in this run.
 
 ## 0.3.0 review - 2026-09-30
 

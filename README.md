@@ -33,8 +33,17 @@ sudo apt install ./iztun_0.3.2_arm64.deb
 **No separate engine installation or compilation is needed.** The `.deb` already
 includes ARM64 builds of [AmneziaWG-GO](https://github.com/amnezia-vpn/amneziawg-go)
 and [amneziawg-tools](https://github.com/amnezia-vpn/amneziawg-tools), alongside IZtun.
-The package is named `iztun`; installation replaces the legacy `amneziawg-linux-gui` package.
 If `apt` cannot find a dependency, run `sudo apt update` and try again.
+
+## Get a VPN configuration
+
+For your own server, export a `.conf` file from **AmneziaVPN** on a computer or Android device:
+
+1. Open AmneziaVPN with administrator access to your server and select **Share**.
+2. Enter a new user name, select your server and **AmneziaWG**, then choose **AmneziaWG native format** under **Connection format**.
+3. Click **Share**, save the `.conf` file and transfer it to your ARM64 computer. In IZtun, click **+** to import it.
+
+Create a separate configuration for each device. See [Amnezia's export guide](https://docs.amnezia.org/documentation/instructions/use-amneziawg-app/).
 
 ## Use
 
