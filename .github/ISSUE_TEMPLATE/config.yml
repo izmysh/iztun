@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Report a security vulnerability privately
-    url: https://github.com/izmysh/IZtun/security/advisories/new
+    url: https://github.com/izmysh/iztun/security/advisories/new
     about: Do not publish vulnerability details or VPN credentials in a public issue.

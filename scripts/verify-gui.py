@@ -464,7 +464,7 @@ class GuiTests(unittest.TestCase):
         self.assertIn("IZtun is a lightweight GUI frontend for AmneziaWG-GO on ARM64 Linux systems.", labels)
         self.assertIn("Developed by IZMYSH", labels)
         link = next(w for w in children(dialog) if isinstance(w, Gtk.LinkButton))
-        self.assertEqual(link.get_uri(), "https://github.com/izmysh/IZtun")
+        self.assertEqual(link.get_uri(), "https://github.com/izmysh/iztun")
         self.assertTrue(link.get_can_focus())
         self.assertIsNotNone(link.get_image())
         dialog.response(Gtk.ResponseType.CLOSE)

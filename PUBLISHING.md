@@ -1,6 +1,6 @@
 # Publishing IZtun on GitHub
 
-The intended project is **https://github.com/izmysh/IZtun**, developed by **IZMYSH**.
+The project is **https://github.com/izmysh/iztun**, developed by **IZMYSH**.
 Providing a URL does not create a repository. Inspect any existing repository
 before uploading; do not overwrite unrelated work.
 
@@ -84,11 +84,11 @@ gh auth status
 
 ## 5. Create and push the repository
 
-Check whether [izmysh/IZtun](https://github.com/izmysh/IZtun) already exists.
+Check whether [izmysh/iztun](https://github.com/izmysh/iztun) already exists.
 For a new repository, from your prepared source directory:
 
 ```bash
-gh repo create izmysh/IZtun --public --source=. --remote=origin --push \
+gh repo create izmysh/iztun --public --source=. --remote=origin --push \
   --description "Lightweight AmneziaWG-GO GUI for ARM64 Linux, by IZMYSH"
 ```
 
@@ -98,13 +98,13 @@ preferred; private runner/attestation availability may differ.
 If an **empty** repository already exists and you own it:
 
 ```bash
-git remote add origin https://github.com/izmysh/IZtun.git
+git remote add origin https://github.com/izmysh/iztun.git
 git push -u origin main
 ```
 
 If it is not empty, review and merge its history first. Do not force-push over it.
 You can also create an empty repository through the website's **New repository**
-button. Name it **IZtun**, and do not generate a second README or license.
+button. Name the repository **iztun**, and do not generate a second README or license.
 
 ## 6. Check the public project
 
@@ -112,7 +112,7 @@ button. Name it **IZtun**, and do not generate a second README or license.
 - Add topics: `amneziawg`, `vpn`, `linux`, `arm64`, `gtk`, `gui`.
 - Enable private vulnerability reporting in repository security settings where available.
 - Inspect **Actions**: the ARM64 workflow builds, tests and scans the engine.
-- Test a fresh `git clone --recurse-submodules https://github.com/izmysh/IZtun.git`.
+- Test a fresh `git clone --recurse-submodules https://github.com/izmysh/iztun.git`.
 
 The archive vendors upstream source, so a repository created from it needs no
 submodule download. Recursive checkout also supports the original developer repository.

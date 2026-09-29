@@ -7,7 +7,7 @@
 Загрузите файл `.conf`, подключитесь к VPN и управляйте профилями через нативное
 окно GTK или системный трей. Electron и браузер для работы приложения не нужны.
 
-[Проект](https://github.com/izmysh/IZtun) · [Релизы](https://github.com/izmysh/IZtun/releases) ·
+[Проект](https://github.com/izmysh/iztun) · [Релизы](https://github.com/izmysh/iztun/releases) ·
 [Безопасность](SECURITY.md) · [Отчёт проверки](AUDIT.md) · [Публикация на GitHub](PUBLISHING.md)
 
 > IZtun — независимая GUI-надстройка. Это не официальное приложение Amnezia
@@ -135,7 +135,7 @@ sha256sum -c SOURCE-MANIFEST.sha256
 Альтернативный способ — клонировать репозиторий:
 
 ```bash
-git clone --recurse-submodules https://github.com/izmysh/IZtun.git
+git clone --recurse-submodules https://github.com/izmysh/iztun.git IZtun
 cd IZtun
 ```
 

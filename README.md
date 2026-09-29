@@ -7,7 +7,7 @@
 Import a `.conf` file, connect, and manage your VPN from a native GTK window or
 the system tray. No Electron or browser runtime.
 
-[Project](https://github.com/izmysh/IZtun) · [Releases](https://github.com/izmysh/IZtun/releases) ·
+[Project](https://github.com/izmysh/iztun) · [Releases](https://github.com/izmysh/iztun/releases) ·
 [Security](SECURITY.md) · [Audit](AUDIT.md) · [Publishing guide](PUBLISHING.md)
 
 > IZtun is an independent frontend, not an official Amnezia application or a new
@@ -127,7 +127,7 @@ sha256sum -c SOURCE-MANIFEST.sha256
 This archive needs no Git initialization or submodule download. Alternatively:
 
 ```bash
-git clone --recurse-submodules https://github.com/izmysh/IZtun.git
+git clone --recurse-submodules https://github.com/izmysh/iztun.git IZtun
 cd IZtun
 ```
 

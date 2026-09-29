@@ -920,7 +920,7 @@ class AmneziaWGApplication(Gtk.Application):
         description.set_justify(Gtk.Justification.CENTER)
         box.add(description)
         box.add(Gtk.Label(label=tr("Developed by IZMYSH")))
-        link = Gtk.LinkButton.new_with_label("https://github.com/izmysh/IZtun", "GitHub")
+        link = Gtk.LinkButton.new_with_label("https://github.com/izmysh/iztun", "GitHub")
         link.set_image(Gtk.Image.new_from_icon_name("web-browser-symbolic", Gtk.IconSize.BUTTON))
         link.set_always_show_image(True)
         link.set_halign(Gtk.Align.CENTER)
